@@ -1,0 +1,62 @@
+
+name: OWASP ZAP Security Scan
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+  pull_request:
+    branches:
+      - main
+      - develop
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zap-security-scan:
+    name: OWASP ZAP Baseline Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Download repository source code
+      - name: Checkout source code
+        uses: actions/checkout@v5
+
+      # Step 2: Start application
+      - name: Start application
+        run: |
+          docker compose up -d --build
+
+      # Step 3: Wait for application to become ready
+      - name: Wait for application
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8080/ > /dev/null; then
+              echo "Application is ready"
+              exit 0
+            fi
+            echo "Waiting for application..."
+            sleep 5
+          done
+
+          echo "Application failed to start"
+          docker compose logs
+          exit 1
+
+      # Step 4: Run OWASP ZAP scan
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: 'http://127.0.0.1:8080'
+          fail_action: false
+          allow_issue_writing: false
+
+      # Step 5: Stop application
+      - name: Stop application
+        if: always()
+        run: docker compose down
